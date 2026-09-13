@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RefundScamBlocker.Core/RefundScamBlocker.Core.csproj" />
+    <Project Path="src/RefundScamBlocker.Diagnostics/RefundScamBlocker.Diagnostics.csproj" />
+    <Project Path="src/RefundScamBlocker.Cli/RefundScamBlocker.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RefundScamBlocker.Core.Tests/RefundScamBlocker.Core.Tests.csproj" />
+    <Project Path="tests/RefundScamBlocker.Cli.Tests/RefundScamBlocker.Cli.Tests.csproj" />
+  </Folder>
+</Solution>
+

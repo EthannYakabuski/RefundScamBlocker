@@ -1,0 +1,15 @@
+# Local toolchains, caches and diagnostic output
+.tools/
+artifacts/
+TestResults/
+**/bin/
+**/obj/
+.vs/
+.idea/
+*.user
+*.suo
+# Never commit signing keys or local secrets.
+*.pfx
+*.p12
+.env
+

@@ -2,9 +2,33 @@
 
 RefundScamBlocker is a proposed free, open-source Windows application designed to reduce phone scams involving remote access to a computer. It is intended for a trusted family member or caregiver to install and manage, with the owner's consent. Anyone can be targeted by a scam.
 
-**Current status: research and design only. There is no working application, installer, browser extension, or protection provided by this repository yet.** The installation and feature descriptions below are plans for implementation, not available functionality.
+**Current status: Phase 1 developer tools.** The repository now contains a read-only Windows capability report, a synthetic blocking-rule simulator, and automated tests. It does **not** install a service, change Windows policies, or block any software or connection. Consumer protection, installer and browser extension work are still ahead.
 
 Read the [architecture and research](docs/ARCHITECTURE.md) for the threat model, evidence, enforcement choices and limitations, and the [implementation plan](docs/IMPLEMENTATION_PLAN.md) for milestones, acceptance criteria and release gates. Research and dependency versions were checked on September 12, 2026.
+
+## Start here: Phase 1
+
+From this checkout in PowerShell, run:
+
+```powershell
+# Optional: download the exact SDK to .tools, verify its SHA-512, and leave system installation alone.
+.\scripts\bootstrap-dotnet.ps1
+.\scripts\verify-environment.ps1
+.\scripts\build.ps1
+.\scripts\test.ps1
+
+# Read-only Windows information; no usernames or computer names are included.
+.\scripts\run.ps1 capabilities --json
+
+# Compare an innocuous text file against its synthetic sample rule. Nothing is executed or blocked.
+.\scripts\run.ps1 simulate --catalog .\examples\synthetic-catalog.json --file .\tests\fixtures\harmless-demo.txt --json
+```
+
+The sample returns `WouldBlock` with `protectionActive: false`. Different bytes return `NoMatchingRule`, which does not mean safe. The sample is not a production catalog; it has no real remote-access product identities. Simulation accepts regular local files and rejects direct network/device paths.
+
+These tools run without administrator rights. Only the SDK and test-package downloads need internet access. The bootstrap and dependency caches stay under ignored `.tools`; test results go to ignored `artifacts/test-results`. An already installed SDK matching [global.json](global.json) also works. Windows PowerShell 5.1 and PowerShell 7 are supported script targets. Building does not require NSIS or Node yet.
+
+See the [Phase 1 checklist](docs/phases/PHASE_1.md). **Phase 2** starts with read-only inventory of the desktop/laptop and Windows 10-specific policy/recovery validation, before live blocking.
 
 ## Planned protection
 
@@ -30,13 +54,15 @@ The project cannot promise to recognize every remote-access application or preve
 
 NSIS remains maintained; version 3.12 was released on April 19, 2026. The architecture compares it with WiX/MSI and MSIX. [NSIS downloads](https://nsis.sourceforge.io/Download).
 
-The initial target is **Windows 11 Home and Pro, x64, version 25H2**. Version 24H2 is eligible only while Microsoft supports the relevant edition and our compatibility tests pass; Home and Pro support ends October 13, 2026. ARM64 is a later target. Windows 10, S mode, Windows Server and centrally managed enterprise devices are outside the initial support baseline. An existing organization's security policy must never be replaced by this installer. [Windows lifecycle](https://learn.microsoft.com/en-us/lifecycle/products/windows-11-home-and-pro).
+**Windows 10 Home and Pro x64 are the primary targets. Windows 11 is not required.** Validation starts with Windows 10 22H2, including the owner's desktop and laptop; older builds need individual compatibility checks. Windows 11 will be tested as an additional target. ARM64/x86, S mode, Windows Server and centrally managed devices are outside initial qualification. An existing organization's security policy must never be replaced by this installer.
+
+Windows compatibility is separate from OS servicing. Microsoft's [Windows 10 ESU information](https://www.microsoft.com/en-us/windows/extended-security-updates) explains continued security updates for eligible 22H2 devices. The blocker cannot replace those updates. Likewise, the [.NET 10 OS support table](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md) currently omits consumer Windows 10 22H2: Phase 1 uses .NET 10 as a developer toolchain, and Phase 2 must resolve production runtime support while preserving the Windows 10 target.
 
 App Control policies can enforce on Home, but Microsoft's App Control PowerShell authoring commands are unavailable there. Policy development therefore needs a Pro development machine or VM, with separate Home compatibility testing. Policies affect the device, not only one user. [App Control feature availability](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/feature-availability).
 
 ## Installation and removal — planned workflow
 
-**There is currently nothing to install.** Do not apply experimental application-control or network policies to a family member's computer. A release must first pass the implementation plan's installation, recovery, compatibility and security checks.
+**There is currently no protection installer.** Phase 1 is safe to run as read-only developer tooling on the owner's machines. Live policy testing comes later, on explicitly designated devices with recovery prepared. A consumer release must first pass the implementation plan's installation, recovery, compatibility and security checks.
 
 The intended consumer workflow is:
 
@@ -56,7 +82,7 @@ Documentation contributions need only Git and a text editor. Implementation cont
 
 ### 1. Prepare an isolated Windows workspace
 
-Use an updated Windows 11 Pro x64 development environment and separate clean Windows 11 Home and Pro test VMs. Create a standard user and a caregiver administrator in each VM. Keep snapshots, console access and recovery information available before testing policies, startup behavior or uninstall flows. Run ordinary editing and builds without elevation; elevate only the specific integration step that needs it. Never develop enforcement on a computer currently relied on for remote recovery.
+Phase 1 can be developed on Windows 10 x64; Home is sufficient for the current diagnostics/simulation. Later policy authoring requires an appropriate Pro environment, while Home gets compiled policies. The owner intends to test on a Windows 10 desktop and laptop. Begin with read-only inventory; prepare backups, local console access and a tested recovery procedure before narrowly scoped live policy tests. Disposable Home/Pro VMs remain useful for repeated failure/reboot testing, but are not mandatory for running Phase 1. Run ordinary editing/builds without elevation.
 
 Install [Git for Windows](https://git-scm.com/downloads/win), then clone the repository into a development folder:
 
@@ -70,12 +96,12 @@ Use your existing checkout if already cloned.
 
 ### 2. Install .NET and an editor
 
-Install the Windows x64 **.NET 10 SDK** from the [official .NET download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The checked SDK version is **10.0.401**, with runtime 10.0.12. The initial implementation milestone will pin the selected SDK in `global.json`; that file does not exist yet. Use a current serviced .NET 10 SDK until the repository supplies its exact pin.
+The exact **.NET 10 SDK 10.0.401** is pinned in [global.json](global.json). The optional bootstrap above downloads Microsoft's Windows x64 archive with the checksum recorded in [SDK metadata](scripts/dotnet-sdk.json). Alternatively install that exact SDK from the [official .NET download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). Do not substitute a different SDK without updating and testing the repository pin.
 
 For a full IDE, install Visual Studio 2026 **18.0 or later** and the **.NET desktop development** workload. Alternatively, use an editor with the standalone .NET CLI. The SDK includes the runtime needed for development. Microsoft's [Windows installation guide](https://learn.microsoft.com/en-us/dotnet/core/install/windows) also documents this installation command:
 
 ```powershell
-winget install --exact --id Microsoft.DotNet.SDK.10
+winget install --exact --id Microsoft.DotNet.SDK.10 --version 10.0.401
 dotnet --info
 dotnet --list-sdks
 ```
@@ -85,15 +111,17 @@ dotnet --list-sdks
 ### 3. Install tooling for your component
 
 - **Installer:** install [NSIS 3.12](https://nsis.sourceforge.io/Download). Add its installation directory to your user `PATH`, or invoke `makensis.exe` by its full installed path. Verify with `makensis /VERSION` in a new terminal.
-- **Policy authoring:** use the Windows PowerShell 5.1 included with Windows 11 Pro. Open `powershell.exe -NoProfile`, then inspect `$PSVersionTable.PSVersion` and `Get-Module -ListAvailable ConfigCI`. Do not assume PowerShell 7 or Home provides the same authoring environment. This check does not deploy a policy.
+- **Policy authoring, later phases:** use Windows PowerShell 5.1 in the designated Pro authoring environment. Open `powershell.exe -NoProfile`, then inspect `$PSVersionTable.PSVersion` and `Get-Module -ListAvailable ConfigCI`. Home does not need authoring cmdlets for Phase 1. Missing CiTool on Windows 10 is expected and does not by itself mean App Control is unavailable.
 - **Browser extension:** install [Node.js 24 LTS](https://nodejs.org/en/download), including npm; verify with `node --version` and `npm --version`. Node is needed for extension development only. The implementation milestone will pin TypeScript and other packages in the extension lockfile. [Node release status](https://nodejs.org/en/about/previous-releases).
 - **Signing or native development:** install the [Windows SDK](https://developer.microsoft.com/en-us/windows/downloads/windows-sdk/). Add C++ build tools only if working on a selected native component. A WDK installation is not a baseline prerequisite. Release-signing credentials belong in protected release infrastructure, never a developer checkout.
 
-### 4. Build and test status
+### 4. Build and test behavior
 
-There is currently **no solution, project file, package manifest, build script, test suite or NSIS script** to run. Tool-version checks above are usable now; `dotnet build`, `dotnet test`, `npm ci` and installer compilation are not yet repository workflows.
+The solution contains Core, Diagnostics and CLI projects plus Core/CLI test projects. Builds use central package versions, committed NuGet lockfiles, analyzers and warnings as errors. `build.ps1` defaults to `-Components Native`; `Browser` and `All` fail explicitly until those components exist. `test.ps1` defaults to `-Suite Unit`; `Integration` fails explicitly until Phase 2 tooling exists. Packaging and the NSIS installer are deferred to Phase 8; there is no placeholder installer.
 
-Milestone M1 in the [implementation plan](docs/IMPLEMENTATION_PLAN.md) must introduce the source layout, dependency pins and restore, build, test, publish and package interfaces. These must support locked restoration, reproducible builds, unprivileged unit tests, separately selected VM integration tests and protected signing. Update this README with executable commands when those interfaces exist.
+The CLI uses exit code `0` for a successful report/simulation, `2` for invalid arguments and `3` for invalid/unreadable simulation input. A `WouldBlock` simulation is a successful comparison, not a real enforcement event. JSON output is machine-readable with enum names; ordinary errors omit full input paths and catalog contents.
+
+Run the build/test commands in the quick start after each relevant change. If you intentionally update dependencies, regenerate lockfiles with the repository NuGet configuration, review the dependency diff and rerun tests. Do not use unlocked restore in routine CI/builds. CI checks developer tools; it cannot establish real Windows 10 prevention or recovery coverage.
 
 ## Contributing
 

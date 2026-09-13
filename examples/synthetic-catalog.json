@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "synthetic-1",
+  "rules": [
+    {
+      "id": "synthetic.harmless-demo",
+      "product": "Harmless text fixture (not remote-access software)",
+      "artifactSha256": "FA40E9651CB108276A79E6E374AA4044B0A17493D578D50E54A035D40D1D9012",
+      "reason": "Demonstrates an exact-content match only. This synthetic rule does not protect the computer."
+    }
+  ]
+}

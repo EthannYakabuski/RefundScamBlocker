@@ -1,0 +1,45 @@
+name: Developer tools
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Bootstrap verified repository-local SDK
+        shell: pwsh
+        run: ./scripts/bootstrap-dotnet.ps1
+      - name: Verify developer environment
+        shell: pwsh
+        run: ./scripts/verify-environment.ps1
+      - name: Build with locked dependencies
+        shell: pwsh
+        run: ./scripts/build.ps1
+      - name: Test non-enforcing developer tools
+        shell: pwsh
+        run: ./scripts/test.ps1
+      - name: Smoke test the synthetic catalog
+        shell: pwsh
+        run: |
+          $output = ./scripts/run.ps1 simulate --catalog ./examples/synthetic-catalog.json --file ./tests/fixtures/harmless-demo.txt --json
+          if ($LASTEXITCODE -ne 0) { throw 'Simulation failed.' }
+          $result = $output | ConvertFrom-Json
+          if ($result.outcome -ne 'WouldBlock' -or $result.protectionActive -ne $false) {
+            throw 'The synthetic simulation did not preserve its expected non-enforcing result.'
+          }
+      - name: Check formatting
+        shell: pwsh
+        run: |
+          . ./scripts/common.ps1
+          Initialize-DotNet
+          Invoke-DotNet -Arguments @('format', $script:SolutionPath, '--verify-no-changes', '--no-restore')

@@ -1,6 +1,6 @@
 # RefundScamBlocker: researched architecture
 
-Status: proposed design; no protection engine, installer, or blocking rules have been implemented or tested in this repository. Research checked on **2026-09-12**. The decisions below are engineering recommendations based on the linked primary sources, not measured product capabilities. Delivery stages and acceptance criteria are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+Status: proposed production architecture. Phase 1 now contains read-only diagnostics and synthetic rule simulation; no protection engine, installer, or production blocking rules exist. Initial research checked on **2026-09-12**, with Windows 10 scope revised following owner feedback. The production decisions below remain recommendations, not measured protection capabilities. Delivery phases and acceptance criteria are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## 1. Recommendation and achievable promise
 
@@ -25,7 +25,7 @@ The best consumer compromise is a maintained, conservative known-tool blocking m
 | --- | --- | --- |
 | A: NSIS installation | Maintained NSIS 3.x Unicode installer invoking a dedicated setup helper | Keep NSIS; it meets the packaging needs. See section 9. |
 | B/C: suitable language(s) | C#/.NET 10 for service, policy management, setup and WPF UI; TypeScript for browser extension; NSIS script for packaging | Native Win32 interop is isolated. No custom kernel driver in v1. |
-| D: Windows only | Initial test target: supported Windows 11 Home and Pro, x64 | ARM64 follows its own validation; no Linux/macOS work. |
+| D: Windows only | Primary target: Windows 10 Home and Pro x64; Windows 11 tested separately | Start with Windows 10 22H2; earlier builds and ARM64 need separate evidence. |
 | i: silent startup | Automatic SCM-managed service in session 0 | No startup window or required user login. Settings UI is separate. |
 | ii: password to uninstall | Password set at installation, verified by privileged maintenance operation | Also requires Windows elevation. Recovery code can reset a forgotten password. Does not defeat OS administrators. |
 | iii: block downloads and installs | Known URL blocking plus execution rules for identified binaries/packages; host-specific installer/script restrictions | Download, install and execution are separate outcomes. Some scripts still run with restrictions; USB, archives, alternate browsers and unknown code bypass download controls. |
@@ -34,11 +34,15 @@ The best consumer compromise is a maintained, conservative known-tool blocking m
 
 ### Supported environment
 
-Develop first against **Windows 11 25H2 Home and Pro x64**. Include 24H2 only while its edition remains supported; Home/Pro 24H2 reaches end of support on 2026-10-13, so it should not become the long-term baseline. New Windows releases require the same tests before being advertised as supported. [Windows lifecycle][windows-lifecycle].
+**Windows 10 is a primary product target; Windows 11 is not required.** Start validation with Windows 10 22H2 Home and Pro x64, including the owner's desktop and laptop. The current desktop was observed as Home 22H2, build 19045.6466; the laptop still needs inventory. Earlier Windows 10 builds remain compatibility candidates until required APIs, patch levels and recovery are tested. Windows 11 is a separately tested additional target, not a substitute for Windows 10.
+
+Product compatibility and Microsoft servicing are distinct. Windows 10 ordinary support ended in 2025; Microsoft's consumer ESU page currently offers security updates for eligible 22H2 devices through 2027-10-12. Record patch/servicing assumptions without making an OS upgrade a prerequisite for this project. RefundScamBlocker cannot replace missing OS security updates. [Windows 10 ESU][windows10-esu].
+
+The .NET 10 developer tooling is provisional for the production service: Microsoft's current .NET 10 OS table lists certain Windows 10 LTSC/Enterprise editions but omits consumer 22H2. A successful local run proves compatibility on that build, not Microsoft support. Phase 2 must resolve runtime maintenance and test coverage; if necessary, change or separate the production runtime/native component while retaining Windows 10 as a requirement. [Runtime OS matrix][dotnet-os].
 
 App Control enforcement is available on Home; its PowerShell authoring cmdlets are not. Compile catalog policies on a Windows Pro build/test machine and deploy the resulting artifacts to Home. AppLocker also now works across current editions, so an Enterprise-only assumption must not drive the design. No Intune subscription, domain join, or Microsoft account is required for the native engine. [Feature availability][availability].
 
-Initial exclusions: Windows 10 and older; Windows Server; Windows S mode; ARM64 until validated; organization-managed machines whose application/browser/network policies may conflict. Detect management and existing policies during setup and explain incompatibility instead of replacing them. Windows 10 support would be a separately funded compatibility decision, not implied by API availability.
+Initial exclusions: Windows 8.1 and older; Windows Server; Windows S mode; ARM64/x86 until validated; organization-managed machines whose application/browser/network policies may conflict. Detect management and existing policies during setup and explain incompatibility instead of replacing them. Do not infer support for every Windows 10 release merely from one working machine.
 
 ## 3. Threat model and product boundaries
 
@@ -135,7 +139,7 @@ For unsigned releases use generated code-identity hashes where appropriate, with
 
 Apply coverage to identified portable EXEs, installed clients/services, helper processes, installers and relevant Store/MSIX packages, with script outcomes qualified above. Do not simply blacklist setup filenames. An MSI broker can install data even when a later executable is denied; an unrecognized installer may also write a covered payload. Record “installed but could not run” separately from “installation prevented.” Preserve the payload execution gate even when delivery classification fails.
 
-Use compiled, release-validated policies on Home. A policy adapter invokes the supported Windows deployment mechanism with trusted artifact paths and owned IDs, reads effective policy state and checks errors/restart requirements. Home must never depend on unavailable local authoring cmdlets. [Deployment][policy-deploy].
+Use compiled, release-validated policies on Home. A version-aware adapter uses trusted artifact paths and owned IDs, reads effective policy state and checks errors/restart requirements. Home must never depend on unavailable authoring cmdlets. CiTool is not a Windows 10 prerequisite: Microsoft's Windows 10 1903+ route deploys compiled multiple-policy files and uses its policy refresh mechanism; activation/removal and reboot behavior require a separate tested Windows 10 adapter. [Deployment][policy-deploy].
 
 Default policies are **unsigned at the App Control tamper-protection layer**; the distribution manifest and release binaries are still cryptographically signed. Signed App Control base policies can bind removal/update to authorized signers with Secure Boot and can cause boot failure if mishandled. They are deferred pending a separate recovery design and extensive validation. [Signed-policy requirements][signed-policy].
 
@@ -248,7 +252,7 @@ Stop update/reconciliation work, deactivate/remove only owned code-policy IDs, r
 
 On Windows 11 24H2 and newer, unsigned App Control policies can be removed using CiTool without a restart; still verify actual removal and honor any other pending restart. Keep the helper/journal until cleanup is confirmed. Do not blindly delete active signed policy files: their removal requires a specific signed replacement and reboot sequence, another reason signed base-policy tamper resistance is deferred. [Microsoft policy removal][policy-removal].
 
-Document an offline owner recovery runbook before any public release, including installation-specific policy IDs, local verification, backup/recovery prerequisites and support for interrupted maintenance. Recovery tooling must never delete another product's policy. Do not turn off Secure Boot/antivirus or weaken OS protections as a normal installation requirement.
+On Windows 10, implement and verify the documented owned-file removal/reboot route instead of assuming CiTool or reboot-free removal is available. Document an offline owner recovery runbook before any live enforcement, including installation-specific policy IDs, local verification, backup/recovery prerequisites and support for interrupted maintenance. The owner's prepared desktop/laptop may be designated test targets; disposable VMs remain recommended for risky failure cases. Recovery tooling must never delete another product's policy. Do not turn off Secure Boot/antivirus or weaken OS protections as a normal installation requirement.
 
 ## 10. Catalog, privacy and operational costs
 
@@ -282,6 +286,8 @@ The sources linked throughout this document are primary vendor, standards, gover
 [service-access]: https://learn.microsoft.com/en-us/windows/win32/services/service-security-and-access-rights
 [cisa-rmm]: https://www.cisa.gov/sites/default/files/2023-02/aa23-025a-protecting-against-malicious-use-of-rmm-software.pdf
 [windows-lifecycle]: https://learn.microsoft.com/en-us/lifecycle/products/windows-11-home-and-pro
+[windows10-esu]: https://www.microsoft.com/en-us/windows/extended-security-updates
+[dotnet-os]: https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md
 [availability]: https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/feature-availability
 [appcontrol-recommendation]: https://learn.microsoft.com/en-us/powershell/scripting/security/app-control/application-control?view=powershell-7.6
 [wfp-api]: https://learn.microsoft.com/en-us/windows/win32/api/fwpmu/nf-fwpmu-fwpmfilteradd0
